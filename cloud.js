@@ -2,10 +2,15 @@
 (() => {
   'use strict';
   const $ = s => document.querySelector(s), app = window.WorkdayApp;
-  const CONFIG = 'little-workday.cloud.config', SESSION = 'little-workday.cloud.session';
+  const CONFIG = 'little-workday.cloud.config', SESSION = 'little-workday.cloud.session.v2', SIGNOUT = 'little-workday.cloud.signout';
   const readJson = key => { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } };
   let config = window.WORKDAY_CLOUD?.url ? window.WORKDAY_CLOUD : readJson(CONFIG) || { url: '', publishableKey: '' };
-  let session = readJson(SESSION), engine = null, debounce, refreshing = null, generation = 0;
+  // Ignore the old shared-browser login. A new tab starts with a guest agenda.
+  localStorage.removeItem('little-workday.cloud.session');
+  let session;
+  try { session = JSON.parse(sessionStorage.getItem(SESSION)); } catch { session = null; }
+  let verified = false, engine = null, debounce, refreshing = null, generation = 0;
+  const persistSession = () => sessionStorage.setItem(SESSION, JSON.stringify(session));
   const status = text => { $('#cloud-status').textContent = text; };
   function validateConfig(value) {
     const u = new URL(value.url);
@@ -25,11 +30,15 @@
     return data;
   }
   function displayAccount() {
-    const logged = !!session;
+    const logged = !!session && verified;
     $('#cloud-login').hidden = logged; $('#cloud-account').hidden = !logged;
     $('#cloud-verify').hidden = true;
     $('#cloud-user').textContent = logged ? 'Masuk sebagai ' + session.user.email : '';
     $('#cloud-url').value = config.url; $('#cloud-key').value = config.publishableKey;
+    $('#cloud-unavailable').hidden = !!config.url;
+    $('#cloud-send').disabled = !config.url;
+    document.querySelector('.workspace-label').textContent = logged ? 'AGENDA PRIBADI' : 'MODE TAMU';
+    $('#save-status').textContent = logged ? 'Agenda akun · tersimpan di perangkat ini' : 'Mode tamu · tersimpan di tab ini';
   }
   async function token() {
     if (!session) throw new Error('Kamu belum masuk. Masuk ke akun untuk menyinkronkan agenda.');
@@ -38,7 +47,7 @@
       const current = session, project = config;
       refreshing = request('/auth/v1/token?grant_type=refresh_token', { method: 'POST', body: { refresh_token: current.refresh_token }, project }).then(data => {
         if (session !== current) throw new Error('Akun yang sedang dipakai sudah berubah. Muat ulang halaman.');
-        session = { ...data, expires_at: Date.now() / 1000 + data.expires_in }; localStorage.setItem(SESSION, JSON.stringify(session)); return session.access_token;
+        session = { ...data, expires_at: Date.now() / 1000 + data.expires_in }; persistSession(); return session.access_token;
       }).finally(() => { refreshing = null; });
     }
     return refreshing;
@@ -48,8 +57,8 @@
     config = validateConfig(config);
     const user = await request('/auth/v1/user', { token: await token() });
     if (run !== generation) return;
-    session.user = user;
-    const hasCache = app.bindAccount(user.id);
+    session.user = user; verified = true;
+    const hasCache = app.bindAccount(user.id, config.url);
     const metaKey = 'little-workday.cloud.meta:' + config.url + ':' + user.id;
     const store = {
       get: async () => { const rows = await request('/rest/v1/workday_agendas?select=revision,payload&user_id=eq.' + user.id, { token: await token() }); return rows[0] || null; },
@@ -59,29 +68,42 @@
     displayAccount(); $('#cloud-controls').hidden = false;
     await engine.initialize(hasCache); if (run === generation) await engine.sync();
   }
-  function clearAccount() {
-    ++generation; engine?.close(); engine = null; session = null; localStorage.removeItem(SESSION); app.bindAccount('');
-    $('#cloud-conflict').hidden = true; displayAccount(); status('Kamu sudah keluar. Agenda akun disembunyikan, tetapi salinannya masih tersimpan di browser ini.');
+  function clearAccount(broadcast = false) {
+    const previous = session;
+    ++generation; clearTimeout(debounce); engine?.close(); engine = null; session = null; verified = false;
+    sessionStorage.removeItem(SESSION); app.bindAccount('');
+    $('#cloud-otp').value = ''; $('#cloud-email').value = '';
+    if (broadcast && previous?.user?.id) localStorage.setItem(SIGNOUT, JSON.stringify({ user: previous.user.id, project: config.url, nonce: Date.now() + ':' + Math.random() }));
+    $('#cloud-conflict').hidden = true; displayAccount(); status('Kamu sudah keluar. Agenda akun ditutup dan mode tamu dimulai lagi.');
   }
   async function action(button, fn) { button.disabled = true; try { await fn(); } catch (error) { status(error.message); } finally { button.disabled = false; } }
-  $('#cloud-open').addEventListener('click', () => { $('#cloud-controls').hidden = !$('#cloud-controls').hidden; if (!config.url) $('#cloud-setup').open = true; });
+  $('#cloud-open').addEventListener('click', () => { $('#cloud-controls').hidden = !$('#cloud-controls').hidden; });
+  $('#account-shortcut').addEventListener('click', () => { $('#cloud-controls').hidden = false; $('#cloud-open').scrollIntoView({ behavior: 'smooth', block: 'center' }); });
   $('#cloud-config-form').addEventListener('submit', e => { e.preventDefault(); action(e.submitter, async () => {
     const next = validateConfig({ url: $('#cloud-url').value.trim(), publishableKey: $('#cloud-key').value.trim() });
     if (session) throw new Error('Keluar dulu sebelum mengganti project Supabase.');
-    config = next; localStorage.setItem(CONFIG, JSON.stringify(config)); $('#cloud-setup').open = false; status('Koneksi disimpan. Masukkan email untuk menerima kode masuk.');
+    config = next; localStorage.setItem(CONFIG, JSON.stringify(config)); displayAccount(); $('#cloud-setup').open = false; status('Koneksi disimpan. Masukkan email untuk menerima kode masuk.');
   }); });
   $('#cloud-login').addEventListener('submit', e => { e.preventDefault(); action(e.submitter, async () => {
     config = validateConfig(config);
+    const run = generation;
     await request('/auth/v1/otp', { method: 'POST', body: { email: $('#cloud-email').value.trim(), create_user: true } });
+    if (run !== generation) return;
     $('#cloud-verify').hidden = false; status('Kode masuk sudah dikirim. Periksa email, lalu masukkan kodenya di bawah.'); $('#cloud-otp').focus();
   }); });
   $('#cloud-verify').addEventListener('submit', e => { e.preventDefault(); action(e.submitter, async () => {
+    const run = generation;
     const data = await request('/auth/v1/verify', { method: 'POST', body: { email: $('#cloud-email').value.trim(), token: $('#cloud-otp').value.trim(), type: 'email' } });
-    session = { ...data, expires_at: Date.now() / 1000 + data.expires_in }; localStorage.setItem(SESSION, JSON.stringify(session)); $('#cloud-otp').value = ''; await connect();
+    if (run !== generation) return;
+    session = { ...data, expires_at: Date.now() / 1000 + data.expires_in }; persistSession(); $('#cloud-otp').value = ''; await connect();
   }); });
   $('#cloud-sync').addEventListener('click', e => action(e.currentTarget, async () => { if (engine?.ready) await engine.sync(); else await connect(); }));
   $('#cloud-logout').addEventListener('click', e => action(e.currentTarget, async () => {
-    try { if (session) await request('/auth/v1/logout?scope=local', { method: 'POST', token: await token() }); } finally { clearAccount(); }
+    const previous = session, project = config;
+    // Hide account data immediately, even if the sign-out request is slow or offline.
+    clearAccount(true);
+    if (previous) try { await request('/auth/v1/logout?scope=local', { method: 'POST', token: previous.access_token, project }); }
+    catch { status('Kamu sudah keluar dari tab ini. Server belum menerima permintaan keluar; sesi yang tersimpan di tab ini sudah dihapus.'); }
   }));
   $('#cloud-use-remote').addEventListener('click', e => action(e.currentTarget, () => engine?.resolve(false)));
   $('#cloud-use-local').addEventListener('click', e => action(e.currentTarget, () => engine?.resolve(true)));
@@ -89,8 +111,19 @@
   window.addEventListener('online', () => engine?.sync());
   document.addEventListener('visibilitychange', () => { if (!document.hidden) engine?.sync(); });
   // Prevent another tab from continuing under an account that has logged out or changed.
-  window.addEventListener('storage', e => { if (e.key === SESSION || e.key === CONFIG) { ++generation; engine?.close(); engine = null; session = null; app.bindAccount(''); displayAccount(); status('Akun atau koneksi diubah lewat tab lain. Muat ulang halaman sebelum melanjutkan.'); } });
+  window.addEventListener('storage', e => {
+    if (e.key === SIGNOUT) {
+      let event; try { event = JSON.parse(e.newValue); } catch { return; }
+      if (event?.user === session?.user?.id && event?.project === config.url) clearAccount();
+    } else if (e.key === CONFIG) {
+      clearAccount(); config = window.WORKDAY_CLOUD?.url ? window.WORKDAY_CLOUD : readJson(CONFIG) || { url: '', publishableKey: '' };
+      displayAccount(); status('Koneksi diubah lewat tab lain. Masuk lagi untuk melanjutkan.');
+    }
+  });
   setInterval(() => { if (!document.hidden) engine?.sync(); }, 15000);
   displayAccount();
-  if (session && config.url) connect().catch(error => status('Belum bisa terhubung ke akun: ' + error.message + '. Klik Sinkronkan sekarang, atau keluar lalu masuk lagi.'));
+  if (session && config.url) connect().catch(error => {
+    if (!verified) clearAccount();
+    status('Belum bisa terhubung ke akun: ' + error.message + (verified ? '. Coba sinkronkan lagi.' : '. Masuk lagi untuk membuka agenda pribadi.'));
+  });
 })();

@@ -2,55 +2,68 @@
 
 [Buka aplikasi](https://terangstefanus.github.io/little-workday/)
 
-Little Workday membantu Terang mengatur tugas, prioritas, jadwal, dan deadline. Ada checklist untuk tugas berulang, timer fokus, serta pengingat saat halaman terbuka. Kucing dan bebek tetap menemani di setiap halaman.
+Pengingat harian untuk kegiatan apa saja: belajar, belanja, olahraga, tagihan, atau tugas yang perlu diselesaikan. Atur jadwal, prioritas, batas waktu, dan pengulangan. Ada checklist dan timer fokus, ditemani kucing serta bebek.
 
-Website di GitHub Pages bisa dibuka dari HP saat PC mati. Kamu bisa langsung menambahkan tugas; untuk sementara, data tersimpan di browser yang dipakai. Agar agenda di PC dan HP sama, hubungkan Supabase lalu masuk dengan akun yang sama.
+Website bisa dibuka dari HP walaupun PC mati. Repository publik hanya berisi kode dan dua contoh rutinitas umum. Agenda pribadi tidak menjadi bagian dari website atau repository.
 
-Repository ini hanya berisi kode aplikasi dan dua contoh rutinitas. Data pekerjaan kantor, dokumen SoW, isi spreadsheet, dan link chat pribadi tidak disertakan.
+## Mode tamu dan akun pribadi
 
-## Menyiapkan Supabase
+- **Mode tamu:** langsung coba aplikasi tanpa masuk. Data hanya disimpan di tab yang sedang dipakai dan tidak dikirim ke layanan akun. Menutup tab dapat menghapusnya, jadi unduh cadangan jika diperlukan. Mode ini tidak memuat agenda tamu dari versi lama.
+- **Akun pribadi:** setelah layanan akun disiapkan, masuk dengan kode dari email. Gunakan email yang sama di PC dan HP untuk membuka agenda yang sama.
+- **Akun berbeda:** setiap email mempunyai agenda sendiri. Orang lain dapat menggunakan website dengan emailnya sendiri; agenda kedua akun tidak digabungkan.
+- **Sesi masuk:** disimpan di tab ini, tidak diaktifkan otomatis untuk semua tab browser. Reload memverifikasi sesi ke server sebelum membuka agenda akun. Tab baru dimulai sebagai tamu; tab yang diduplikasi atau dipulihkan browser dapat membawa sesi tab sebelumnya.
+- **Keluar:** segera menutup agenda, formulir, pesan pengingat, dan timer akun, lalu membuka mode tamu baru. Keluar juga menutup sesi akun yang sama pada tab lain yang sedang terbuka.
 
-Fitur masuk dan sinkronisasi sudah disiapkan, tetapi belum aktif sebelum project Supabase dihubungkan. Ikuti langkah berikut pada project baru milikmu.
+Pada perangkat bersama, **keluar sebelum memberikan tab yang sama kepada orang lain**. Salinan agenda akun masih disimpan di browser untuk pemulihan dan perubahan yang belum terkirim. Salinan ini tidak dienkripsi oleh aplikasi; hapus data situs lewat pengaturan browser jika perangkat akan dipakai bersama. File cadangan yang sudah diunduh juga perlu disimpan secara privat.
 
-1. Buka [Supabase Dashboard](https://supabase.com/dashboard) dan buat project. Simpan password database secara privat; aplikasi tidak memerlukan password itu.
-2. Buka **SQL Editor**, salin isi [supabase-setup.sql](supabase-setup.sql), lalu jalankan. Script membuat tabel agenda dan aturan akses agar setiap akun hanya bisa membaca serta mengubah datanya sendiri. Jalankan pada project Supabase baru, bukan database SQL Server kantor.
-3. Di **Authentication → Providers / Sign In**, aktifkan **Email**. Pada **Email Templates → Magic Link** dan **Confirm signup**, masukkan kode ini ke isi email: `<p>Kode masuk Little Workday: {{ .Token }}</p>`. Template signup digunakan saat akun belum ada. Aplikasi menerima kode 6–10 digit dari email, bukan link masuk.
-4. Di **Project Settings → API / API Keys**, salin **Project URL** dan **publishable key** yang diawali `sb_publishable_`. Kunci `anon` lama juga didukung. Jangan gunakan **secret key**, **service_role**, atau password database. Pastikan langkah SQL sudah selesai; kunci publik tetap memerlukan aturan akses data yang benar.
-5. Buka Little Workday. Klik **Masuk & sinkronisasi → Hubungkan Supabase**, tempel Project URL dan publishable key, lalu pilih **Simpan koneksi**.
-6. Masukkan email dan klik **Kirim kode masuk**. Periksa email, masukkan kodenya, lalu klik **Masuk**.
-7. Ulangi langkah koneksi dan masuk di HP. Gunakan project serta email yang sama dengan PC.
+Login dan sinkronisasi **belum aktif** sebelum project Supabase dihubungkan. Mode tamu tetap bisa digunakan.
 
-Pengaturan koneksi disimpan per browser. Jika ingin koneksi langsung tersedia di semua perangkat, isi `config.js` dengan Project URL dan **publishable key saja**, lalu unggah perubahan ke GitHub. Jangan memasukkan kunci rahasia.
+## Menyiapkan layanan akun
 
-Untuk mencoba pengiriman email bawaan Supabase, pakai email anggota organisasi/project Supabase kamu. Pengiriman bawaan dibatasi untuk anggota tim dan jumlah emailnya terbatas. Untuk alamat lain atau penggunaan rutin, atur **custom SMTP** di Authentication. Jika kode tidak datang, periksa folder spam, log Auth, dan pengaturan SMTP. Lihat [panduan SMTP Supabase](https://supabase.com/docs/guides/auth/auth-smtp).
+Lakukan langkah berikut pada project Supabase baru milikmu.
 
-Pemakaian, biaya, serta kemungkinan project dijeda mengikuti paket Supabase yang dipilih. Panduan terkait: [kode masuk lewat email](https://supabase.com/docs/guides/auth/auth-email-passwordless), [API keys](https://supabase.com/docs/guides/getting-started/api-keys), dan [aturan akses data atau RLS](https://supabase.com/docs/guides/database/postgres/row-level-security).
+1. Buka [Supabase Dashboard](https://supabase.com/dashboard) dan buat project. Simpan password database secara privat; aplikasi tidak membutuhkan password itu.
+2. Buka **SQL Editor**, salin [supabase-setup.sql](supabase-setup.sql), lalu jalankan. Script membuat penyimpanan agenda dan aturan akses per akun. Jalankan pada project baru khusus aplikasi ini.
+3. Di **Authentication → Providers / Sign In**, aktifkan **Email**. Pada **Email Templates → Magic Link** dan **Confirm signup**, masukkan `<p>Kode masuk Little Workday: {{ .Token }}</p>` ke isi email. Aplikasi menerima kode 6–10 digit, bukan link masuk.
+4. Di **Project Settings → API / API Keys**, salin **Project URL** dan **publishable key** yang diawali `sb_publishable_`. Kunci `anon` lama juga didukung. Jangan gunakan **secret key**, **service_role**, atau password database.
+5. Buka website. Klik **Buka akun → Pengaturan koneksi untuk pemilik situs**, tempel URL dan publishable key, lalu pilih **Simpan koneksi**.
+6. Masukkan email, klik **Kirim kode masuk**, lalu masukkan kode yang diterima dan klik **Masuk**.
+7. Di HP, gunakan project dan email yang sama untuk membuka agendamu. Untuk agenda orang lain, gunakan email yang berbeda.
 
-## Membawa agenda dari aplikasi lokal
+Agar pengunjung tidak perlu mengatur koneksi sendiri, isi `config.js` dengan Project URL dan **publishable key saja**, lalu unggah ke GitHub. Kedua nilai itu memang boleh digunakan di browser. Pastikan SQL dan aturan akses sudah disiapkan terlebih dahulu.
 
-1. Buka aplikasi lokal terbaru melalui browser yang biasa digunakan.
-2. Pilih **Pengingat & data → Unduh cadangan (JSON)**. File menyimpan tugas, jadwal, deadline, checklist, pengaturan, serta referensi SoW dan spreadsheet. File ini berisi data pekerjaanmu, jadi simpan secara privat dan jangan unggah ke repository publik.
-3. Di website online, **masuk ke akun terlebih dahulu**. Pilih **Pengingat & data → Pulihkan dari file**, lalu pilih file tadi. Konfirmasikan penggantian agenda setelah memeriksa jumlah tugasnya.
-4. Tunggu sampai status menunjukkan sinkronisasi selesai. Buka website di HP dan masuk dengan akun yang sama untuk melihat agendanya.
+Pengiriman email bawaan Supabase dibatasi untuk anggota organisasi/project. Untuk alamat lain dan penggunaan rutin, atur **custom SMTP** di Authentication. Jika kode tidak datang, periksa spam, log Auth, dan pengaturan SMTP. Lihat [panduan SMTP Supabase](https://supabase.com/docs/guides/auth/auth-smtp).
 
-Referensi spreadsheet dan SoW adalah salinan dari file cadangan. Aplikasi tidak membaca perubahan Google Sheets atau Codex secara otomatis dan tidak mengubah sumber aslinya. Link chat Codex memerlukan aplikasi serta akun yang sesuai. Lokasi file SoW di PC juga tidak otomatis menjadi dokumen yang bisa dibuka dari HP.
+Panduan terkait: [kode masuk melalui email](https://supabase.com/docs/guides/auth/auth-email-passwordless), [API keys](https://supabase.com/docs/guides/getting-started/api-keys), dan [aturan akses per akun atau RLS](https://supabase.com/docs/guides/database/postgres/row-level-security). Pemakaian, biaya, dan kemungkinan project dijeda mengikuti paket Supabase.
 
-## Cara sinkronisasi bekerja
+## Memulihkan agenda lama
 
-Saat terhubung ke internet, perubahan dikirim ke akunmu sekitar 1,5 detik setelah edit. PC atau HP yang membuka halaman akan memeriksa pembaruan sekitar setiap 15 detik. Klik **Sinkronkan sekarang** jika ingin segera memeriksa.
+1. Di aplikasi yang menyimpan agenda lama, pilih **Pengingat & data → Unduh cadangan (JSON)**. Simpan file secara privat.
+2. Di website ini, **masuk ke akunmu sendiri terlebih dahulu**.
+3. Pilih **Pengingat & data → Pulihkan dari file**, pilih cadangannya, lalu konfirmasikan setelah memeriksa jumlah tugas.
+4. Tunggu sinkronisasi selesai sebelum membuka agenda di perangkat lain.
 
-Jika dua perangkat mengedit bersamaan, aplikasi meminta kamu memilih agenda yang akan dipakai. Perubahan belum digabungkan otomatis. Unduh cadangan sebelum memilih jika kedua versi masih diperlukan.
+Cadangan lama tetap didukung. Tugas, jadwal, catatan, dan checklist akan muncul dalam tampilan umum. Metadata tambahan dari format lama disimpan untuk menjaga isi cadangan, tetapi tidak mempunyai menu khusus di website ini.
 
-Setiap akun memiliki salinan data tersendiri di browser. Keluar menyembunyikan agenda akun, tetapi tidak menghapus salinan atau file cadangan yang sudah diunduh. Pada perangkat bersama, keluar lalu hapus data situs melalui pengaturan browser. Agenda online disimpan di project Supabase yang kamu hubungkan, dengan akses per akun melalui RLS.
+Agenda tamu dan salinan akun dari versi lama tidak dipindahkan otomatis, agar pengunjung berikutnya tidak membuka data lama tanpa masuk. Data lama tidak dihapus oleh pembaruan ini. Pulihkan melalui cadangan; agenda yang sudah berhasil disinkronkan akan dimuat setelah masuk.
 
-## Pengingat
+## Sinkronisasi dan pemeriksaan privasi
 
-Biarkan halaman terbuka di perangkat yang aktif agar pengingat berjalan. GitHub Pages tidak menjalankan pengingat saat browser ditutup. Notifikasi atau email terjadwal yang tetap dikirim saat halaman ditutup belum tersedia.
+Perubahan dikirim sekitar 1,5 detik setelah edit. Halaman yang sedang terbuka memeriksa pembaruan setiap sekitar 15 detik. Klik **Sinkronkan sekarang** untuk segera memeriksa. Jika dua perangkat mengedit bersamaan, pilih versi yang ingin dipakai; perubahan belum digabungkan otomatis.
 
-## Menjalankan dan memeriksa kode
+Aturan database menggunakan ID akun terverifikasi, bukan nama yang ditulis di tampilan. Pengunjung tanpa login tidak diberi akses ke tabel agenda. Setelah setup, lakukan pemeriksaan berikut sebelum memasukkan agenda pribadi:
 
-Aplikasi memakai HTML, CSS, dan JavaScript tanpa bundler. Buka `index.html` atau gunakan server statis lokal. Jalankan pengujian dengan `node --test tests/sync.test.cjs`.
+1. Masuk dengan akun A di PC dan HP. Tambahkan satu tugas percobaan, lalu pastikan perubahan muncul di keduanya.
+2. Masuk dengan akun B pada browser atau perangkat terpisah. Pastikan tugas A tidak muncul; buat tugas B dan pastikan tugas itu tidak muncul di A.
+3. Keluar dari A saat formulir edit atau pengingat terbuka. Pastikan mode tamu tidak menampilkan isinya.
+4. Uji aturan database melalui API dengan token A: permintaan untuk `user_id` milik B harus menghasilkan daftar kosong. Percobaan menulis baris B harus ditolak. Permintaan tanpa token pengguna harus ditolak. Fungsi simpan menentukan pemilik dari sesi server.
 
-Pengujian memakai penyimpanan simulasi. Setelah Supabase disiapkan, uji masuk lewat email, aturan akses antar-akun, dan sinkronisasi pada dua perangkat sebelum mengandalkannya untuk pekerjaan sehari-hari.
+Pemeriksaan otomatis memakai simulasi penyimpanan dan autentikasi. Login email, aturan database, serta sinkronisasi nyata belum diuji karena project Supabase belum tersedia.
 
-Untuk GitHub Pages, pilih **Settings → Pages → Deploy from a branch → main → /(root)**. File `.nojekyll` membuat aset disajikan langsung. Unggah hanya isi folder online; jangan sertakan folder kerja kantor, file cadangan, screenshot pekerjaan, atau kredensial.
+## Pengingat dan menjalankan kode
+
+Biarkan halaman terbuka pada perangkat yang aktif agar pengingat berjalan. GitHub Pages tidak menjalankan pengingat saat browser ditutup. Notifikasi atau email terjadwal saat halaman tertutup belum tersedia.
+
+Aplikasi memakai HTML, CSS, dan JavaScript. Gunakan server statis lokal untuk mencoba kode. Jalankan tes dengan `node --test tests/*.test.cjs`.
+
+Untuk GitHub Pages, pilih **Settings → Pages → Deploy from a branch → main → /(root)**. Unggah hanya isi folder online. Jangan sertakan folder pribadi, cadangan agenda, screenshot data pribadi, atau kredensial.

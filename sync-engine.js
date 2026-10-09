@@ -36,7 +36,7 @@
         else if (row && (row.revision !== this.meta.revision || edited)) { this.remote = row; this.conflict(true); }
         else if (!row || edited) { this.meta.pending = true; this.persist(this.meta); }
         this.last = signature(this.read()); this.ready = true;
-        if (this.remote) this.status('Agenda di perangkat dan akunmu berbeda. Pilih agenda yang ingin dipakai lewat Masuk & sinkronisasi.');
+        if (this.remote) this.status('Agenda di perangkat dan akunmu berbeda. Klik Buka akun untuk memilih agenda yang ingin dipakai.');
         else this.status(this.meta.pending ? 'Agenda siap disimpan ke akunmu.' : 'Agenda sudah sama dengan yang tersimpan di akunmu.');
       } catch (error) { this.ready = true; this.status('Agenda dari akun belum bisa dimuat: ' + error.message); throw error; }
       finally { this.busy = false; }

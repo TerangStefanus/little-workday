@@ -1,7 +1,7 @@
 /* Little Workday: plain JavaScript, local data, no external dependencies. */
 (() => {
   'use strict';
-  let KEY = 'little-workday.online.v1:guest';
+  let KEY, storage;
   const priorities = { urgent: 0, high: 1, normal: 2, low: 3 };
   const priorityLabels = { urgent: 'Mendesak', high: 'Tinggi', normal: 'Normal', low: 'Rendah' };
   const dateKey = (date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -61,80 +61,44 @@
   if (typeof document === 'undefined') return;
 
   const $ = selector => document.querySelector(selector);
-  let catalog = window.WORK_CATALOG;
-  let sheet = window.WORK_SHEET;
-  const projectFor = id => catalog.projects.find(p => p.id === id);
+  const accounts = new WorkdayAccounts(localStorage, sessionStorage);
+  ({ key: KEY, storage } = accounts.guest());
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const formatDate = (value, options = { day: 'numeric', month: 'short' }) => new Intl.DateTimeFormat('id-ID', options).format(parseDate(value));
   const today = () => dateKey();
   const makeTask = fields => normalizeTask({ id: uid(), title: '', priority: 'normal', status: 'todo', repeat: 'none', duration: 30, ...fields });
-  function taskFromSheet(row) {
-    const p = projectFor(row.project);
-    const near = row.end && row.end >= today() && row.end <= addDays(today(), 7) && /on dev/i.test(row.status);
-    return makeTask({ title: row.title, project: row.project, status: sourceStatus(row.status), priority: near ? 'high' : 'normal', sourceKey: row.key, chatTitle: p?.chatTitle || '', chatUrl: p?.chatUrl || '', notes: `Status sumber: ${row.status}\nRencana sumber: ${row.startLabel || '—'} → ${row.endLabel || '—'}${near ? '\nEND DATE dekat; konfirmasi apakah target ini masih berlaku.' : ''}${row.support ? '\nSupport: ' + row.support : ''}\nSalinan sumber · ${row.tab}, baris ${row.row}. Tentukan jadwal dan deadline sebelum mulai mengerjakan.` });
-  }
-  function findSourceTask(row) {
-    const signature = value => value.trim().replace(/\s+/g, ' ').toLocaleLowerCase('id');
-    const equivalentKeys = sheet.rows.filter(r => signature(r.title) === signature(row.title)).map(r => r.key);
-    return state.tasks.find(t => equivalentKeys.includes(t.sourceKey));
-  }
-  function addSheetRow(row, replacePlaceholder = false) {
-    if (findSourceTask(row)) return false;
-    const imported = taskFromSheet(row), p = projectFor(row.project);
-    const placeholder = replacePlaceholder && p && state.tasks.find(t => t.title === `Tinjau pekerjaan ${p.name}` && t.notes === 'Saran dari referensi folder/chat. Konfirmasi status, prioritas, dan deadline sebelum dijadwalkan.' && t.status === 'todo' && !t.date && !t.deadline && !t.sourceKey);
-    if (placeholder) state.tasks = state.tasks.map(t => t.id === placeholder.id ? { ...imported, id: t.id } : t);
-    else state.tasks.push(imported);
-    return true;
-  }
   function seedState() {
     return { version: 1, tasks: [
-      makeTask({ title: 'Pilih tiga prioritas hari ini', date: today(), time: '08:30', duration: 15, repeat: 'weekdays' }),
-      makeTask({ title: 'Catat progres & siapkan langkah besok', date: today(), time: '16:45', duration: 15, repeat: 'weekdays' })
+      makeTask({ title: 'Lihat jadwal dan pilih kegiatan hari ini', date: today(), time: '08:30', duration: 15, repeat: 'weekdays' }),
+      makeTask({ title: 'Cek agenda dan siapkan rencana besok', date: today(), time: '16:45', duration: 15, repeat: 'weekdays' })
     ], references: null, settings: { reminders: true, dailyTime: '08:30', welcomeDismissed: false }, reminded: {}, timer: null };
   }
   let loadWarning = '', recoveryRaw = '', state;
   try {
-    const stored = localStorage.getItem(KEY);
+    const stored = storage.getItem(KEY);
     if (stored) { const raw = JSON.parse(stored); state = normalizeState(raw); state.reminded = raw.reminded && typeof raw.reminded === 'object' && !Array.isArray(raw.reminded) ? raw.reminded : {}; state.timer = raw.timer && Number.isFinite(raw.timer.remaining) && raw.timer.remaining >= 0 && raw.timer.remaining <= 3000 && [25, 50].includes(raw.timer.minutes) && (raw.timer.end == null || Number.isFinite(raw.timer.end)) ? raw.timer : null; }
     else state = seedState();
-  } catch { try { recoveryRaw = localStorage.getItem(KEY) || ''; } catch { /* storage may be unavailable */ } state = seedState(); loadWarning = 'Agenda yang tersimpan di browser tidak bisa dibaca. Data lama belum diubah. Klik Unduh cadangan untuk menyimpan salinannya, lalu pulihkan dari file cadangan yang bisa dibaca.'; }
-  function refreshReferences() {
-    catalog = state.references?.catalog || window.WORK_CATALOG;
-    sheet = state.references?.sheet || window.WORK_SHEET;
-    $('#form-project').innerHTML = '<option value="">Rutinitas / pribadi</option>' + catalog.projects.map(p => '<option value="' + p.id + '">' + escapeHtml(p.name) + '</option>').join('');
-    $('#chat-names').innerHTML = catalog.chats.map(c => '<option value="' + escapeHtml(c.title) + '"></option>').join('');
-    $('#sheet-source-link').hidden = !sheet.url;
-    $('#sheet-source-link').href = sheet.url;
-    $('#source-title').textContent = sheet.title || 'Referensi pekerjaanmu';
-    $('#source-description').textContent = sheet.owner ? 'Salinan daftar pekerjaan ' + sheet.owner + '. Cek spreadsheet untuk melihat status terbaru.' : 'Belum ada referensi pekerjaan. Masuk ke akun, lalu pulihkan file cadangan dari aplikasi lokal.';
-  }
-  refreshReferences();
+  } catch { try { recoveryRaw = storage.getItem(KEY) || ''; } catch { /* storage may be unavailable */ } state = seedState(); loadWarning = 'Agenda yang tersimpan di browser tidak bisa dibaca. Data lama belum diubah. Klik Unduh cadangan untuk menyimpan salinannya, lalu pulihkan dari file cadangan yang bisa dibaca.'; }
   let selectedDate = today(), view = 'today', agendaFilter = 'open', savingAllowed = !loadWarning, toastTimeout, confirmCallback;
   let timer = state.timer || { minutes: 25, remaining: 1500, end: null, taskId: '' };
   let observedDay = today();
-  // One-time additive migration for the user's selected source; custom tasks remain intact.
-  if (savingAllowed && state.settings.sheetSnapshot !== sheet.snapshot) {
-    sheet.rows.filter(r => r.tab === sheet.defaultTab && sourceStatus(r.status) !== 'done').forEach(r => addSheetRow(r, true));
-    state.settings.sheetSnapshot = sheet.snapshot; state.settings.sheetTab ||= sheet.defaultTab;
-  }
   function toast(message) { $('#toast').textContent = message; $('#toast').hidden = false; clearTimeout(toastTimeout); toastTimeout = setTimeout(() => { $('#toast').hidden = true; }, 4500); }
   function save(force = false) {
     state.timer = timer;
     if (!savingAllowed && !force) { toast('Data tersimpan tidak bisa dibaca. Unduh salinannya atau pulihkan cadangan sebelum melanjutkan.'); return false; }
-    try { localStorage.setItem(KEY, JSON.stringify(state)); $('#save-status').textContent = 'Tersimpan di browser ini'; window.dispatchEvent(new Event('workday-change')); return true; }
+    try { storage.setItem(KEY, JSON.stringify(state)); $('#save-status').textContent = storage === sessionStorage ? 'Mode tamu · tersimpan di tab ini' : 'Agenda akun · tersimpan di perangkat ini'; window.dispatchEvent(new Event('workday-change')); return true; }
     catch { $('#storage-warning').hidden = false; $('#storage-warning').textContent = 'Perubahan belum berhasil disimpan. Unduh cadangan sebelum menutup halaman agar perubahanmu tidak hilang.'; $('#save-status').textContent = 'Belum tersimpan · unduh cadangan'; return false; }
   }
   function askConfirm(title, message, callback) { $('#confirm-title').textContent = title; $('#confirm-message').textContent = message; confirmCallback = callback; $('#confirm-dialog').showModal(); }
   function taskCard(t, date = selectedDate) {
-    const done = isDone(t, date), p = projectFor(t.project), late = !done && t.deadline && t.deadline < today();
+    const done = isDone(t, date), late = !done && t.deadline && t.deadline < today();
     const overdue = !done && t.repeat === 'none' && t.date && t.date < date;
-    const chat = t.chatUrl && safeUrl(t.chatUrl);
     return `<article class="task-card ${done ? 'done' : ''} ${late || overdue ? 'overdue' : ''}" data-id="${escapeHtml(t.id)}" data-occurrence="${date}">
       <button class="check-button" data-action="toggle" aria-label="${done ? 'Batalkan selesai' : 'Tandai selesai'}: ${escapeHtml(t.title)}" aria-pressed="${done}">${done ? '✓' : ''}</button>
       <div class="task-main"><div class="task-topline"><h3 class="task-title"><img class="task-pet" src="${[...t.title].reduce((sum, c) => sum + c.charCodeAt(0), 0) % 2 ? 'cat.svg' : 'duck.svg'}" alt="" aria-hidden="true">${escapeHtml(t.title)}</h3><span class="badge ${t.priority}">${priorityLabels[t.priority]}</span></div>
-      <div class="task-meta">${p ? `<span class="project-tag">${escapeHtml(p.name)}</span>` : `<span class="project-tag">${t.sourceKey ? 'PRPK · Spreadsheet' : 'Rutinitas / pribadi'}</span>`}${t.sourceKey ? '<span>▤ Sumber spreadsheet</span>' : ''}${t.time ? `<span>◷ ${t.time} · ${t.duration} menit</span>` : `<span>${t.duration} menit</span>`}${t.date ? `<span>${formatDate(t.date)}${overdue ? ' · belum selesai sejak tanggal ini' : ''}</span>` : '<span>Belum dijadwalkan</span>'}${t.deadline ? `<span class="${late ? 'late' : ''}">⚑ Deadline ${formatDate(t.deadline)}${late ? ' · sudah lewat' : ''}</span>` : ''}${t.repeat !== 'none' ? `<span>↻ ${({ daily: 'Harian', weekdays: 'Senin–Jumat', weekly: 'Mingguan' })[t.repeat]}</span>` : ''}${t.status === 'waiting' ? '<span class="badge waiting">Menunggu</span>' : ''}</div>
+      <div class="task-meta">${t.time ? `<span>◷ ${t.time} · ${t.duration} menit</span>` : `<span>${t.duration} menit</span>`}${t.date ? `<span>${formatDate(t.date)}${overdue ? ' · belum selesai sejak tanggal ini' : ''}</span>` : '<span>Belum dijadwalkan</span>'}${t.deadline ? `<span class="${late ? 'late' : ''}">⚑ Deadline ${formatDate(t.deadline)}${late ? ' · sudah lewat' : ''}</span>` : ''}${t.repeat !== 'none' ? `<span>↻ ${({ daily: 'Harian', weekdays: 'Senin–Jumat', weekly: 'Mingguan' })[t.repeat]}</span>` : ''}${t.status === 'waiting' ? '<span class="badge waiting">Menunggu</span>' : ''}</div>
       ${t.notes ? `<p class="task-notes">${escapeHtml(t.notes)}</p>` : ''}
-      <div class="task-footer">${t.chatTitle ? (chat ? `<a class="chat-link" href="${escapeHtml(chat)}" ${chat.startsWith('http') ? 'target="_blank" rel="noopener noreferrer"' : ''}>↗ ${escapeHtml(t.chatTitle)}</a>` : `<span class="chat-link">Chat: ${escapeHtml(t.chatTitle)}</span>`) : '<span class="chat-link">Belum ada chat terkait</span>'}${t.chatTitle ? '<button class="small-action" data-action="copy-chat">Salin nama chat</button>' : ''}${!t.date && !done ? '<button class="small-action" data-action="schedule">Jadwalkan</button>' : ''}<button class="small-action" data-action="edit">Edit</button></div></div></article>`;
+      <div class="task-footer">${!t.date && !done ? '<button class="small-action" data-action="schedule">Jadwalkan</button>' : ''}<button class="small-action" data-action="edit">Edit</button></div></div></article>`;
   }
   const empty = (message, symbol = '✿') => `<div class="empty-state"><span>${symbol}</span>${message}</div>`;
   function sorted(tasks, date, byTime = false) { return [...tasks].sort((a, b) => byTime ? Number(isDone(a, date)) - Number(isDone(b, date)) || (a.time || '99:99').localeCompare(b.time || '99:99') || rank(a, date) - rank(b, date) : rank(a, date) - rank(b, date) || (a.deadline || '9999').localeCompare(b.deadline || '9999') || (a.time || '99').localeCompare(b.time || '99')); }
@@ -164,17 +128,10 @@
   function renderTasks() {
     const query = $('#task-search').value.toLocaleLowerCase('id'), status = $('#task-status').value, priority = $('#task-priority').value;
     const tasks = sorted(state.tasks.filter(t => {
-      const text = `${t.title} ${projectFor(t.project)?.name || ''} ${t.chatTitle} ${t.notes}`.toLocaleLowerCase('id');
+      const text = `${t.title} ${t.notes}`.toLocaleLowerCase('id');
       return text.includes(query) && (priority === 'all' || t.priority === priority) && (status === 'all' || (status === 'waiting' ? t.status === 'waiting' : status === 'done' ? isDone(t, today()) : !isDone(t, today())));
     }), today());
     $('#all-task-list').innerHTML = tasks.map(t => taskCard(t, t.date && t.date > today() ? t.date : today())).join('') || empty('Tidak ada tugas yang cocok. Coba ubah pencarian atau filter.');
-  }
-  function renderProjects() {
-    const query = $('#project-search').value.toLocaleLowerCase('id');
-    $('#project-list').innerHTML = catalog.projects.filter(p => `${p.name} ${p.code} ${p.chatTitle}`.toLocaleLowerCase('id').includes(query)).map(p => {
-      const count = state.tasks.filter(t => t.project === p.id && t.status !== 'done').length;
-      return `<article class="project-card"><div class="project-top"><span class="project-symbol">▧</span><span>${escapeHtml(p.code)}</span><span style="margin-left:auto">${count} tugas aktif</span></div><h2>${escapeHtml(p.name)}</h2>${p.folder ? `<div class="project-path">${escapeHtml(p.folder)}${p.document ? `<br>↳ ${escapeHtml(p.document)}` : ''}</div>` : ''}<p>${escapeHtml(p.note)}</p>${p.chatTitle ? `<p>Chat: <strong>${escapeHtml(p.chatTitle)}</strong></p>` : '<p>Chat belum dipetakan — bisa diisi pada tugas.</p>'}<div class="project-links"><button class="button subtle" data-project-add="${p.id}">＋ Tugas terkait</button>${p.chatUrl ? `<a class="button subtle" href="${escapeHtml(safeUrl(p.chatUrl))}">Buka chat ↗</a>` : ''}${p.folder ? `<button class="button subtle" data-copy-path="${p.id}">Salin lokasi ${p.document ? 'SoW' : 'folder'}</button>` : ''}</div></article>`;
-    }).join('') || empty('Tidak ada referensi SoW atau chat yang cocok.');
   }
   function renderSettings() {
     $('#reminders-enabled').checked = state.settings.reminders; $('#daily-reminder-time').value = state.settings.dailyTime;
@@ -183,24 +140,12 @@
     $('#enable-notifications').disabled = !supported || Notification.permission === 'granted' || Notification.permission === 'denied';
     $('#timezone-label').textContent = Intl.DateTimeFormat().resolvedOptions().timeZone;
   }
-  function renderSheet() {
-    $('#sheet-tab').value = state.settings.sheetTab || sheet.defaultTab;
-    const tab = $('#sheet-tab').value, filter = $('#sheet-status').value, query = $('#sheet-search').value.toLocaleLowerCase('id');
-    const rows = sheet.rows.filter(r => r.tab === tab);
-    const visible = rows.filter(r => (filter === 'all' || (filter === 'live' ? sourceStatus(r.status) === 'done' : sourceStatus(r.status) !== 'done')) && `${r.title} ${r.status}`.toLocaleLowerCase('id').includes(query));
-    $('#sheet-summary').textContent = `${rows.length} pekerjaan Terang · ${rows.filter(r => sourceStatus(r.status) !== 'done').length} belum Live · ${rows.filter(r => sourceStatus(r.status) === 'done').length} Live`;
-    $('#sheet-list').innerHTML = visible.map((row, i) => {
-      const imported = findSourceTask(row), p = projectFor(row.project), category = sourceStatus(row.status), near = row.end && row.end >= today() && row.end <= addDays(today(), 7);
-      return `<article class="source-card ${near && category === 'todo' ? 'near-date' : ''}"><div class="source-card-top"><img class="source-pet" src="${i % 2 ? 'cat.svg' : 'duck.svg'}" alt="" aria-hidden="true"><div><h3>${escapeHtml(row.title)}</h3><span class="badge ${category === 'done' ? 'normal' : category === 'waiting' ? 'waiting' : 'high'}">${escapeHtml(row.status)}</span></div></div><div class="source-dates"><span><small>TANGGAL MULAI</small>${escapeHtml(row.startLabel || '—')}</span><span><small>TANGGAL SELESAI</small>${escapeHtml(row.endLabel || '—')}${near && category !== 'done' ? '<b>Target segera tiba · cek jadwal</b>' : ''}</span></div><div class="source-card-footer"><span>${p ? escapeHtml(p.name) : 'Belum ada folder atau chat terkait'}${row.support ? ' · Support: ' + escapeHtml(row.support) : ''}</span>${imported ? `<button class="button subtle" data-sheet-edit="${escapeHtml(imported.id)}">Atur tugas ↗</button>` : category === 'done' ? '<span class="source-live">✓ Sudah Live</span>' : `<button class="button primary" data-sheet-add="${row.key}">＋ Tambahkan ke tugas</button>`}</div></article>`;
-    }).join('') || empty('Belum ada pekerjaan yang bisa ditampilkan. Periksa data, pilihan tab, atau filter.', '🐈 🦆');
-  }
-  function render() { renderToday(); renderTasks(); renderProjects(); renderSettings(); renderSheet(); updateTimer(); }
+  function render() { renderToday(); renderTasks(); renderSettings(); updateTimer(); }
   function setView(next) {
-    view = ['today', 'tasks', 'projects', 'settings', 'sheet'].includes(next) ? next : 'today';
+    view = ['today', 'tasks', 'settings'].includes(next) ? next : 'today';
     for (const el of document.querySelectorAll('.view')) el.hidden = el.id !== `${view}-view`;
     for (const el of document.querySelectorAll('[data-view]')) { el.classList.toggle('active', el.dataset.view === view); if (el.dataset.view === view) el.setAttribute('aria-current', 'page'); else el.removeAttribute('aria-current'); }
-    const headings = { today: ['AGENDA HARIAN', 'Apa yang perlu<br>dikerjakan hari ini<span>?</span>', 'Lihat jadwal, pilih tugas yang paling penting, lalu mulai kerjakan.'], tasks: ['DAFTAR TUGAS', 'Semua tugasmu,<br>di satu tempat<span>.</span>', 'Cari tugas, ubah prioritas, dan tentukan jadwalnya.'], projects: ['REFERENSI PEKERJAAN', 'SoW dan chat<br>yang terkait<span>.</span>', 'Cari dokumen pekerjaan dan chat Codex yang membahasnya.'], settings: ['PENGATURAN', 'Pengingat dan<br>cadangan data<span>.</span>', 'Pilih jam pengingat dan simpan salinan agendamu.'] };
-    headings.sheet = ['DATA DARI SPREADSHEET', 'Daftar pekerjaan<br>dari spreadsheet<span>.</span>', 'Periksa status pekerjaan, lalu tambahkan yang masih perlu dikerjakan ke daftar tugas.'];
+    const headings = { today: ['AGENDA HARIAN', 'Apa yang perlu<br>dikerjakan hari ini<span>?</span>', 'Lihat jadwal, pilih tugas yang paling penting, lalu mulai kerjakan.'], tasks: ['DAFTAR TUGAS', 'Semua tugasmu,<br>di satu tempat<span>.</span>', 'Cari tugas, ubah prioritas, dan tentukan jadwalnya.'], settings: ['PENGATURAN', 'Pengingat dan<br>cadangan data<span>.</span>', 'Pilih jam pengingat dan simpan salinan agendamu.'] };
     $('#page-eyebrow').textContent = headings[view][0]; $('#page-title').innerHTML = headings[view][1]; $('#page-description').textContent = headings[view][2];
     history.replaceState(null, '', `#${view}`);
   }
@@ -208,14 +153,9 @@
     const form = $('#task-form'); form.reset(); const task = state.tasks.find(t => t.id === id);
     $('#dialog-title').textContent = task ? 'Edit tugas' : 'Tambah tugas'; $('#delete-task').hidden = !task;
     if (task) { for (const [key, value] of Object.entries(task)) if (form.elements.namedItem(key)) form.elements.namedItem(key).value = value; }
-    if (!task) { form.elements.namedItem('id').value = ''; form.elements.namedItem('date').value = selectedDate; form.elements.namedItem('project').value = project; form.elements.namedItem('duration').value = 30; fillChat(project); }
+    if (!task) { form.elements.namedItem('id').value = ''; form.elements.namedItem('date').value = selectedDate; form.elements.namedItem('duration').value = 30;  }
     if (schedule) form.elements.namedItem('date').value = selectedDate;
     $('#task-dialog').showModal();
-  }
-  function fillChat(project) { const p = projectFor(project); $('#task-form').elements.namedItem('chatTitle').value = p?.chatTitle || ''; $('#task-form').elements.namedItem('chatUrl').value = p?.chatUrl || ''; }
-  async function copy(text) {
-    try { await navigator.clipboard.writeText(text); toast('Tersalin.'); }
-    catch { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.top = '-1000px'; document.body.append(ta); ta.select(); const ok = document.execCommand('copy'); ta.remove(); if (ok) toast('Tersalin.'); else askConfirm('Salin teks ini', text, () => {}); }
   }
   function notify(title, message, key = '') {
     $('#reminder-banner').replaceChildren(); const strong = document.createElement('strong'); strong.textContent = `${title} · `; const span = document.createElement('span'); span.textContent = message; const dismiss = document.createElement('button'); dismiss.textContent = 'Tutup'; dismiss.addEventListener('click', () => { $('#reminder-banner').hidden = true; }); $('#reminder-banner').append(dismiss, strong, span); $('#reminder-banner').hidden = false;
@@ -243,9 +183,7 @@
     $('#focus-task').disabled = !!timer.end;
     if (timer.end && remaining === 0) { const t = state.tasks.find(t => t.id === timer.taskId); timer.end = null; timer.remaining = 0; save(); notify('Sesi fokus selesai ✿', `${t ? `${t.title}. ` : ''}Waktunya istirahat sebentar.`); updateTimer(); }
   }
-  function exportData() { const blob = new Blob([recoveryRaw || JSON.stringify({ ...state, references: { catalog, sheet }, exportedAt: new Date().toISOString() }, null, 2)], { type: 'application/json' }); const link = document.createElement('a'), url = URL.createObjectURL(blob); link.href = url; link.download = `little-workday-${recoveryRaw ? 'recovery-' : ''}${today()}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1500); toast(recoveryRaw ? 'Salinan data lama diunduh. Simpan file ini untuk pemulihan.' : 'Cadangan diunduh. Simpan file ini untuk memulihkan agenda nanti. File berisi data pekerjaanmu, jadi jangan bagikan secara publik.'); }
-  $('#form-project').innerHTML = '<option value="">Rutinitas / pribadi</option>' + catalog.projects.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
-  $('#chat-names').innerHTML = catalog.chats.map(c => `<option value="${escapeHtml(c.title)}"></option>`).join('');
+  function exportData() { const blob = new Blob([recoveryRaw || JSON.stringify({ ...state, references: state.references || null, exportedAt: new Date().toISOString() }, null, 2)], { type: 'application/json' }); const link = document.createElement('a'), url = URL.createObjectURL(blob); link.href = url; link.download = `little-workday-${recoveryRaw ? 'recovery-' : ''}${today()}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1500); toast(recoveryRaw ? 'Salinan data lama diunduh. Simpan file ini untuk pemulihan.' : 'Cadangan diunduh. Simpan file ini untuk memulihkan agenda nanti. File berisi agendamu. Simpan untuk keperluan pribadi.'); }
   document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
   $('.brand').addEventListener('click', e => { e.preventDefault(); setView('today'); });
   window.addEventListener('hashchange', () => setView(location.hash.slice(1)));
@@ -253,8 +191,6 @@
   $('#close-dialog').addEventListener('click', () => $('#task-dialog').close()); $('#cancel-dialog').addEventListener('click', () => $('#task-dialog').close());
   $('#confirm-cancel').addEventListener('click', () => { confirmCallback = null; $('#confirm-dialog').close(); });
   $('#confirm-accept').addEventListener('click', () => { const cb = confirmCallback; confirmCallback = null; $('#confirm-dialog').close(); cb?.(); });
-  $('#task-form').elements.namedItem('project').addEventListener('change', e => fillChat(e.target.value));
-  $('#task-form').elements.namedItem('chatTitle').addEventListener('change', e => { const c = catalog.chats.find(c => c.title === e.target.value); if (c) $('#task-form').elements.namedItem('chatUrl').value = c.url; });
   $('#task-form').addEventListener('submit', e => {
     e.preventDefault(); const data = Object.fromEntries(new FormData(e.target)); const previous = state.tasks.find(t => t.id === data.id); let task;
     try { task = normalizeTask({ ...previous, ...data, doneDates: previous?.doneDates || [], completedOn: data.status === 'done' ? previous?.completedOn || today() : '' }); }
@@ -271,7 +207,6 @@
       const card = action.closest('[data-id]'), t = state.tasks.find(t => t.id === card.dataset.id), date = card.dataset.occurrence; if (!t) return;
       if (action.dataset.action === 'edit') openTask(t.id);
       if (action.dataset.action === 'schedule') openTask(t.id, '', true);
-      if (action.dataset.action === 'copy-chat') copy(t.chatTitle);
       if (action.dataset.action === 'toggle') {
         if (!savingAllowed) return toast('Pulihkan cadangan data sebelum mengubah agenda.');
         const done = isDone(t, date);
@@ -280,10 +215,6 @@
         save(); render(); toast(done ? 'Tugas ditandai belum selesai.' : 'Tugas ditandai selesai.');
       }
     }
-    const projectAdd = e.target.closest('[data-project-add]'); if (projectAdd) openTask('', projectAdd.dataset.projectAdd);
-    const sheetEdit = e.target.closest('[data-sheet-edit]'); if (sheetEdit) openTask(sheetEdit.dataset.sheetEdit);
-    const sheetAdd = e.target.closest('[data-sheet-add]'); if (sheetAdd) { if (!savingAllowed) return toast('Muat ulang halaman atau pulihkan cadangan data sebelum mengubah agenda.'); const row = sheet.rows.find(r => r.key === sheetAdd.dataset.sheetAdd); if (row && addSheetRow(row)) { save(); render(); toast('Pekerjaan ditambahkan. Klik Edit untuk menentukan jadwal dan deadline.'); } }
-    const pathButton = e.target.closest('[data-copy-path]'); if (pathButton) { const p = projectFor(pathButton.dataset.copyPath); copy(`${catalog.root}\\${p.folder.replaceAll('/', '\\')}${p.document ? '\\' + p.document.replaceAll('/', '\\') : ''}`); }
     const next = e.target.closest('[data-next]'); if (next) { const t = state.tasks.find(t => t.id === next.dataset.next); if (t) openTask(t.id, '', !t.date); }
   });
   $('#week-strip').addEventListener('click', e => { const b = e.target.closest('[data-date]'); if (b) { selectedDate = b.dataset.date; render(); } });
@@ -293,12 +224,6 @@
   $('#agenda-sort').addEventListener('change', renderToday);
   $('#agenda-tabs').addEventListener('click', e => { const b = e.target.closest('[data-filter]'); if (b) { agendaFilter = b.dataset.filter; document.querySelectorAll('[data-filter]').forEach(el => el.classList.toggle('selected', el === b)); renderToday(); } });
   ['task-search', 'task-status', 'task-priority'].forEach(id => $(`#${id}`).addEventListener(id === 'task-search' ? 'input' : 'change', renderTasks));
-  $('#project-search').addEventListener('input', renderProjects);
-  $('#sheet-source-link').href = sheet.url;
-  $('#sheet-shortcut').addEventListener('click', e => { e.preventDefault(); setView('sheet'); });
-  $('#sheet-tab').addEventListener('change', e => { state.settings.sheetTab = e.target.value; save(); renderSheet(); });
-  $('#sheet-status').addEventListener('change', renderSheet);
-  $('#sheet-search').addEventListener('input', renderSheet);
   $('#dismiss-welcome').addEventListener('click', () => { state.settings.welcomeDismissed = true; save(); renderToday(); });
   $('#reminders-enabled').addEventListener('change', e => { state.settings.reminders = e.target.checked; save(); if (!e.target.checked) $('#reminder-banner').hidden = true; });
   $('#daily-reminder-time').addEventListener('change', e => { if (validTime(e.target.value)) { state.settings.dailyTime = e.target.value; delete state.reminded[`${today()}:daily`]; save(); toast('Jam pengingat disimpan.'); } });
@@ -312,7 +237,7 @@
   $('#import-button').addEventListener('click', () => $('#import-data').click());
   $('#import-data').addEventListener('change', async e => {
     const file = e.target.files[0]; if (!file) return;
-    try { if (file.size > 10 * 1024 * 1024) throw new Error('File cadangan terlalu besar. Batas ukurannya 10 MB.'); const imported = normalizeState(JSON.parse(await file.text())); askConfirm('Ganti agenda dengan data dari file?', `File berisi ${imported.tasks.length} tugas dan akan mengganti seluruh agenda saat ini. Unduh cadangan dulu jika ingin menyimpan agenda yang sekarang.`, () => { state = imported; refreshReferences(); recoveryRaw = ''; timer = { minutes: 25, remaining: 1500, end: null, taskId: '' }; savingAllowed = true; $('#storage-warning').hidden = true; save(true); render(); toast('Agenda berhasil dipulihkan dari file.'); }); }
+    try { if (file.size > 10 * 1024 * 1024) throw new Error('File cadangan terlalu besar. Batas ukurannya 10 MB.'); const scope = KEY; const imported = normalizeState(JSON.parse(await file.text())); if (scope !== KEY) return; askConfirm('Ganti agenda dengan data dari file?', `File berisi ${imported.tasks.length} tugas dan akan mengganti seluruh agenda saat ini. Unduh cadangan dulu jika ingin menyimpan agenda yang sekarang.`, () => { if (scope !== KEY) return; state = imported;  recoveryRaw = ''; timer = { minutes: 25, remaining: 1500, end: null, taskId: '' }; savingAllowed = true; $('#storage-warning').hidden = true; save(true); render(); toast('Agenda berhasil dipulihkan dari file.'); }); }
     catch (error) { toast(error instanceof SyntaxError ? 'File tidak bisa dibaca. Pilih file JSON hasil unduhan cadangan Little Workday.' : error.message); }
     finally { e.target.value = ''; }
   });
@@ -326,8 +251,15 @@
   if (loadWarning) { $('#storage-warning').textContent = loadWarning; $('#storage-warning').hidden = false; }
   window.WorkdayApp = {
     snapshot: () => JSON.parse(JSON.stringify({ version: 1, tasks: state.tasks, settings: state.settings, references: state.references || null })),
-    replace: raw => { state = normalizeState(raw); timer = { minutes: 25, remaining: 1500, end: null, taskId: '' }; refreshReferences(); savingAllowed = true; recoveryRaw = ''; $('#storage-warning').hidden = true; save(true); render(); },
-    bindAccount: id => { KEY = id ? 'little-workday.online.v1:' + id : 'little-workday.online.v1:guest'; const stored = localStorage.getItem(KEY); state = stored ? normalizeState(JSON.parse(stored)) : seedState(); timer = { minutes: 25, remaining: 1500, end: null, taskId: '' }; refreshReferences(); savingAllowed = true; render(); return !!stored; }
+    replace: raw => { state = normalizeState(raw); timer = { minutes: 25, remaining: 1500, end: null, taskId: '' };  savingAllowed = true; recoveryRaw = ''; $('#storage-warning').hidden = true; save(true); render(); },
+    bindAccount: (id, project) => {
+      // Close every surface that might still contain the previous account's data.
+      for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
+      confirmCallback = null;
+      $('#task-form').reset(); $('#task-search').value = ''; $('#toast').hidden = true;
+      $('#reminder-banner').hidden = true; $('#storage-warning').hidden = true;
+      selectedDate = today();
+      ({ key: KEY, storage } = id ? accounts.account(id, project) : accounts.guest(true)); const stored = storage.getItem(KEY); state = stored ? normalizeState(JSON.parse(stored)) : seedState(); timer = { minutes: 25, remaining: 1500, end: null, taskId: '' };  savingAllowed = true; render(); return !!stored; }
   };
   setView(location.hash.slice(1)); render(); if (!loadWarning) save(); tick(); setInterval(tick, 1000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
