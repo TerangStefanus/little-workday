@@ -89,7 +89,7 @@
   window.addEventListener('online', () => engine?.sync());
   document.addEventListener('visibilitychange', () => { if (!document.hidden) engine?.sync(); });
   // Prevent another tab from continuing under an account that has logged out or changed.
-  window.addEventListener('storage', e => { if (e.key === SESSION || e.key === CONFIG) { ++generation; engine?.close(); engine = null; status('Akun/koneksi berubah di tab lain. Muat ulang sebelum melanjutkan.'); } });
+  window.addEventListener('storage', e => { if (e.key === SESSION || e.key === CONFIG) { ++generation; engine?.close(); engine = null; session = null; app.bindAccount(''); displayAccount(); status('Akun/koneksi berubah di tab lain. Muat ulang sebelum melanjutkan.'); } });
   setInterval(() => { if (!document.hidden) engine?.sync(); }, 15000);
   displayAccount();
   if (session && config.url) connect().catch(error => status('Sesi belum terhubung: ' + error.message + '. Coba Sinkron sekarang atau keluar dan login kembali.'));
