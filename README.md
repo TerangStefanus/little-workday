@@ -1,40 +1,56 @@
 # Little Workday 🐈 🦆
 
-Agenda harian HTML/CSS/JavaScript dengan kucing, bebek, prioritas, checklist berulang, timer fokus, dan backup. Hosting GitHub Pages tetap dapat diakses dari HP saat PC mati.
+[Buka aplikasi](https://terangstefanus.github.io/little-workday/)
 
-**Website:** https://terangstefanus.github.io/little-workday/
+Little Workday membantu Terang mengatur tugas, prioritas, jadwal, dan deadline. Ada checklist untuk tugas berulang, timer fokus, serta pengingat saat halaman terbuka. Kucing dan bebek tetap menemani di setiap halaman.
 
-Kode publik ini memulai agenda dengan dua rutinitas umum. Data pekerjaan, katalog SoW, spreadsheet, dan chat pribadi tidak disertakan dalam repository. Semua aset memakai path relatif agar bekerja di subfolder GitHub Pages.
+Website di GitHub Pages bisa dibuka dari HP saat PC mati. Kamu bisa langsung menambahkan tugas; untuk sementara, data tersimpan di browser yang dipakai. Agar agenda di PC dan HP sama, hubungkan Supabase lalu masuk dengan akun yang sama.
 
-## Mengaktifkan login dan sinkron PC/HP
+Repository ini hanya berisi kode aplikasi dan dua contoh rutinitas. Data pekerjaan kantor, dokumen SoW, isi spreadsheet, dan link chat pribadi tidak disertakan.
 
-Integrasi tersedia, tetapi belum ada backend yang dihubungkan. Buat project Supabase milikmu dahulu; pengaturan berikut dilakukan sekali.
+## Menyiapkan Supabase
 
-1. Buka [Supabase Dashboard](https://supabase.com/dashboard), buat project baru, dan simpan password database secara privat. Jangan menaruhnya dalam repository atau konfigurasi browser.
-2. Di **SQL Editor**, jalankan isi [supabase-setup.sql](supabase-setup.sql) pada project baru. Script membuat tabel `workday_agendas`, Row Level Security per akun, dan fungsi simpan dengan pemeriksaan revisi. Script bukan untuk SQL Server kantor.
-3. Di **Authentication → Providers / Sign In**, aktifkan Email. Pada **Email Templates → Magic Link** serta **Confirm signup**, gunakan kode di isi email: `<p>Kode login Little Workday: {{ .Token }}</p>`. Template signup digunakan jika akun belum ada. Aplikasi memakai kode email, sehingga tidak memerlukan callback magic-link. Atur panjang OTP 6–10 digit jika opsi tersedia.
-4. Di **Project Settings → API / API Keys**, salin **Project URL** dan **publishable key** (`sb_publishable_...`). Legacy `anon` key juga didukung. **Jangan gunakan secret key atau service_role.** API key publik aman hanya jika aturan RLS sudah diterapkan; jangan melewati langkah SQL.
-5. Di website, klik **Login & sinkron → Hubungkan project Supabase**, masukkan URL dan publishable key, lalu simpan. Masukkan email, kirim kode, dan masuk menggunakan kode dari email.
-6. Lakukan langkah koneksi dan login yang sama di HP dengan project dan email yang sama. Konfigurasi koneksi disimpan per browser. Jika ingin otomatis untuk semua perangkat, isi `config.js` dengan URL dan **publishable key saja**, lalu commit perubahan.
-7. Perubahan otomatis dikirim sekitar 1,5 detik setelah edit. Perangkat lain mengambil perubahan sekitar 15 detik saat halaman terbuka, atau lewat **Sinkron sekarang**. Saat dua perangkat mengedit bersamaan, aplikasi menahan penimpaan dan meminta pilihan versi. Ekspor backup sebelum memilih versi karena aplikasi belum menggabungkan konflik per kolom.
+Fitur masuk dan sinkronisasi sudah disiapkan, tetapi belum aktif sebelum project Supabase dihubungkan. Ikuti langkah berikut pada project baru milikmu.
 
-Untuk uji pribadi dengan SMTP bawaan, gunakan email yang menjadi anggota organisasi/project Supabase kamu. Pengiriman bawaan dibatasi untuk alamat anggota tim dan memiliki batas pengiriman rendah. Untuk email lain atau penggunaan rutin, konfigurasi **custom SMTP** pada Authentication. Ikuti keterangan Dashboard; jika kode tidak datang, cek log Auth, spam, serta konfigurasi SMTP. Penggunaan, kemungkinan project dijeda, dan biaya mengikuti paket layanan yang kamu pilih. Panduan resmi: [email OTP](https://supabase.com/docs/guides/auth/auth-email-passwordless), [SMTP](https://supabase.com/docs/guides/auth/auth-smtp), [API keys](https://supabase.com/docs/guides/getting-started/api-keys), [RLS](https://supabase.com/docs/guides/database/postgres/row-level-security).
+1. Buka [Supabase Dashboard](https://supabase.com/dashboard) dan buat project. Simpan password database secara privat; aplikasi tidak memerlukan password itu.
+2. Buka **SQL Editor**, salin isi [supabase-setup.sql](supabase-setup.sql), lalu jalankan. Script membuat tabel agenda dan aturan akses agar setiap akun hanya bisa membaca serta mengubah datanya sendiri. Jalankan pada project Supabase baru, bukan database SQL Server kantor.
+3. Di **Authentication → Providers / Sign In**, aktifkan **Email**. Pada **Email Templates → Magic Link** dan **Confirm signup**, masukkan kode ini ke isi email: `<p>Kode masuk Little Workday: {{ .Token }}</p>`. Template signup digunakan saat akun belum ada. Aplikasi menerima kode 6–10 digit dari email, bukan link masuk.
+4. Di **Project Settings → API / API Keys**, salin **Project URL** dan **publishable key** yang diawali `sb_publishable_`. Kunci `anon` lama juga didukung. Jangan gunakan **secret key**, **service_role**, atau password database. Pastikan langkah SQL sudah selesai; kunci publik tetap memerlukan aturan akses data yang benar.
+5. Buka Little Workday. Klik **Masuk & sinkronisasi → Hubungkan Supabase**, tempel Project URL dan publishable key, lalu pilih **Simpan koneksi**.
+6. Masukkan email dan klik **Kirim kode masuk**. Periksa email, masukkan kodenya, lalu klik **Masuk**.
+7. Ulangi langkah koneksi dan masuk di HP. Gunakan project serta email yang sama dengan PC.
 
-## Memindahkan data dari aplikasi lokal
+Pengaturan koneksi disimpan per browser. Jika ingin koneksi langsung tersedia di semua perangkat, isi `config.js` dengan Project URL dan **publishable key saja**, lalu unggah perubahan ke GitHub. Jangan memasukkan kunci rahasia.
 
-1. Buka aplikasi lokal versi terbaru dengan browser yang biasa digunakan.
-2. **Pengingat & backup → Ekspor backup JSON**. Backup mencakup tugas, deadline, checklist, serta katalog SoW dan snapshot spreadsheet. Simpan file ini secara privat; jangan commit atau unggah ke repository publik.
-3. Di website online, **login terlebih dahulu**, kemudian **Impor backup** dan konfirmasi penggantian agenda. Setelah sinkron, buka HP dan login dengan akun yang sama.
-4. Spreadsheet dan katalog adalah snapshot yang diimpor. Perubahan Google Sheets/Codex tidak otomatis dibaca, dan aplikasi tidak mengubah sumber tersebut. Link chat Codex memerlukan aplikasi/akun yang sesuai; path lokal SoW tidak menjadi dokumen web.
+Untuk mencoba pengiriman email bawaan Supabase, pakai email anggota organisasi/project Supabase kamu. Pengiriman bawaan dibatasi untuk anggota tim dan jumlah emailnya terbatas. Untuk alamat lain atau penggunaan rutin, atur **custom SMTP** di Authentication. Jika kode tidak datang, periksa folder spam, log Auth, dan pengaturan SMTP. Lihat [panduan SMTP Supabase](https://supabase.com/docs/guides/auth/auth-smtp).
 
-Setiap akun punya cache browser terpisah. Keluar menyembunyikan agenda akun tetapi tidak menghapus cache atau backup lokal. Pada perangkat bersama, keluar lalu hapus data situs melalui pengaturan browser. Data disimpan di Supabase project yang kamu hubungkan; akses ditentukan oleh RLS, bukan password halaman HTML.
+Pemakaian, biaya, serta kemungkinan project dijeda mengikuti paket Supabase yang dipilih. Panduan terkait: [kode masuk lewat email](https://supabase.com/docs/guides/auth/auth-email-passwordless), [API keys](https://supabase.com/docs/guides/getting-started/api-keys), dan [aturan akses data atau RLS](https://supabase.com/docs/guides/database/postgres/row-level-security).
+
+## Membawa agenda dari aplikasi lokal
+
+1. Buka aplikasi lokal terbaru melalui browser yang biasa digunakan.
+2. Pilih **Pengingat & data → Unduh cadangan (JSON)**. File menyimpan tugas, jadwal, deadline, checklist, pengaturan, serta referensi SoW dan spreadsheet. File ini berisi data pekerjaanmu, jadi simpan secara privat dan jangan unggah ke repository publik.
+3. Di website online, **masuk ke akun terlebih dahulu**. Pilih **Pengingat & data → Pulihkan dari file**, lalu pilih file tadi. Konfirmasikan penggantian agenda setelah memeriksa jumlah tugasnya.
+4. Tunggu sampai status menunjukkan sinkronisasi selesai. Buka website di HP dan masuk dengan akun yang sama untuk melihat agendanya.
+
+Referensi spreadsheet dan SoW adalah salinan dari file cadangan. Aplikasi tidak membaca perubahan Google Sheets atau Codex secara otomatis dan tidak mengubah sumber aslinya. Link chat Codex memerlukan aplikasi serta akun yang sesuai. Lokasi file SoW di PC juga tidak otomatis menjadi dokumen yang bisa dibuka dari HP.
+
+## Cara sinkronisasi bekerja
+
+Saat terhubung ke internet, perubahan dikirim ke akunmu sekitar 1,5 detik setelah edit. PC atau HP yang membuka halaman akan memeriksa pembaruan sekitar setiap 15 detik. Klik **Sinkronkan sekarang** jika ingin segera memeriksa.
+
+Jika dua perangkat mengedit bersamaan, aplikasi meminta kamu memilih agenda yang akan dipakai. Perubahan belum digabungkan otomatis. Unduh cadangan sebelum memilih jika kedua versi masih diperlukan.
+
+Setiap akun memiliki salinan data tersendiri di browser. Keluar menyembunyikan agenda akun, tetapi tidak menghapus salinan atau file cadangan yang sudah diunduh. Pada perangkat bersama, keluar lalu hapus data situs melalui pengaturan browser. Agenda online disimpan di project Supabase yang kamu hubungkan, dengan akses per akun melalui RLS.
 
 ## Pengingat
 
-Hosting tidak menjalankan scheduler atau push otomatis. Pengingat yang ada hanya bekerja saat halaman terbuka di perangkat yang aktif. Push/email terjadwal saat browser ditutup memerlukan backend scheduler dan layanan notifikasi terpisah; fitur tersebut belum diterapkan.
+Biarkan halaman terbuka di perangkat yang aktif agar pengingat berjalan. GitHub Pages tidak menjalankan pengingat saat browser ditutup. Notifikasi atau email terjadwal yang tetap dikirim saat halaman ditutup belum tersedia.
 
 ## Menjalankan dan memeriksa kode
 
-Tidak perlu bundler. Buka `index.html`, atau jalankan server statis lokal untuk pengujian. Tests: `node tests/sync.test.cjs`. Pengujian ini memakai fake store; login, email delivery, dan RLS harus diverifikasi pada project Supabase yang sudah diaktifkan sebelum mengandalkan sinkronisasi.
+Aplikasi memakai HTML, CSS, dan JavaScript tanpa bundler. Buka `index.html` atau gunakan server statis lokal. Jalankan pengujian dengan `node --test tests/sync.test.cjs`.
 
-GitHub Pages: **Settings → Pages → Deploy from a branch → main → /(root)**. `.nojekyll` membuat aset disajikan langsung. Upload hanya isi folder online ini; jangan upload folder kerja kantor, backup JSON, screenshot berisi pekerjaan, atau kredensial.
+Pengujian memakai penyimpanan simulasi. Setelah Supabase disiapkan, uji masuk lewat email, aturan akses antar-akun, dan sinkronisasi pada dua perangkat sebelum mengandalkannya untuk pekerjaan sehari-hari.
+
+Untuk GitHub Pages, pilih **Settings → Pages → Deploy from a branch → main → /(root)**. File `.nojekyll` membuat aset disajikan langsung. Unggah hanya isi folder online; jangan sertakan folder kerja kantor, file cadangan, screenshot pekerjaan, atau kredensial.

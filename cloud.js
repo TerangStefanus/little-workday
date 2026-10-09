@@ -9,12 +9,12 @@
   const status = text => { $('#cloud-status').textContent = text; };
   function validateConfig(value) {
     const u = new URL(value.url);
-    if (u.protocol !== 'https:' || !/^[a-z0-9-]+\.supabase\.co$/.test(u.hostname) || u.username || u.password || u.pathname !== '/' || u.search || u.hash) throw new Error('Gunakan Project URL resmi https://…supabase.co.');
+    if (u.protocol !== 'https:' || !/^[a-z0-9-]+\.supabase\.co$/.test(u.hostname) || u.username || u.password || u.pathname !== '/' || u.search || u.hash) throw new Error('Project URL harus memakai alamat https://…supabase.co dari pengaturan Supabase.');
     const key = value.publishableKey.trim();
-    if (key.startsWith('sb_secret_')) throw new Error('Secret key tidak boleh dipakai di browser.');
+    if (key.startsWith('sb_secret_')) throw new Error('Ini secret key. Ganti dengan publishable key agar kunci rahasiamu tidak digunakan di browser.');
     if (!key.startsWith('sb_publishable_')) {
       try { const claims = JSON.parse(atob(key.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); if (claims.role !== 'anon') throw new Error(); }
-      catch { throw new Error('Gunakan publishable key atau legacy anon key, bukan service_role.'); }
+      catch { throw new Error('Kunci ini belum sesuai. Gunakan publishable key atau anon key lama; jangan gunakan service_role.'); }
     }
     return { url: u.origin, publishableKey: key };
   }
@@ -32,12 +32,12 @@
     $('#cloud-url').value = config.url; $('#cloud-key').value = config.publishableKey;
   }
   async function token() {
-    if (!session) throw new Error('Masuk kembali untuk melanjutkan.');
+    if (!session) throw new Error('Kamu belum masuk. Masuk ke akun untuk menyinkronkan agenda.');
     if (session.expires_at > Date.now() / 1000 + 60) return session.access_token;
     if (!refreshing) {
       const current = session, project = config;
       refreshing = request('/auth/v1/token?grant_type=refresh_token', { method: 'POST', body: { refresh_token: current.refresh_token }, project }).then(data => {
-        if (session !== current) throw new Error('Sesi sudah berubah.');
+        if (session !== current) throw new Error('Akun yang sedang dipakai sudah berubah. Muat ulang halaman.');
         session = { ...data, expires_at: Date.now() / 1000 + data.expires_in }; localStorage.setItem(SESSION, JSON.stringify(session)); return session.access_token;
       }).finally(() => { refreshing = null; });
     }
@@ -61,19 +61,19 @@
   }
   function clearAccount() {
     ++generation; engine?.close(); engine = null; session = null; localStorage.removeItem(SESSION); app.bindAccount('');
-    $('#cloud-conflict').hidden = true; displayAccount(); status('Kamu sudah keluar. Data akun tidak ditampilkan; cache privat masih ada di perangkat ini.');
+    $('#cloud-conflict').hidden = true; displayAccount(); status('Kamu sudah keluar. Agenda akun disembunyikan, tetapi salinannya masih tersimpan di browser ini.');
   }
   async function action(button, fn) { button.disabled = true; try { await fn(); } catch (error) { status(error.message); } finally { button.disabled = false; } }
   $('#cloud-open').addEventListener('click', () => { $('#cloud-controls').hidden = !$('#cloud-controls').hidden; if (!config.url) $('#cloud-setup').open = true; });
   $('#cloud-config-form').addEventListener('submit', e => { e.preventDefault(); action(e.submitter, async () => {
     const next = validateConfig({ url: $('#cloud-url').value.trim(), publishableKey: $('#cloud-key').value.trim() });
-    if (session) throw new Error('Keluar dari akun sebelum mengganti koneksi.');
-    config = next; localStorage.setItem(CONFIG, JSON.stringify(config)); $('#cloud-setup').open = false; status('Koneksi disimpan. Kirim kode login ke emailmu.');
+    if (session) throw new Error('Keluar dulu sebelum mengganti project Supabase.');
+    config = next; localStorage.setItem(CONFIG, JSON.stringify(config)); $('#cloud-setup').open = false; status('Koneksi disimpan. Masukkan email untuk menerima kode masuk.');
   }); });
   $('#cloud-login').addEventListener('submit', e => { e.preventDefault(); action(e.submitter, async () => {
     config = validateConfig(config);
     await request('/auth/v1/otp', { method: 'POST', body: { email: $('#cloud-email').value.trim(), create_user: true } });
-    $('#cloud-verify').hidden = false; status('Cek email untuk kode login, lalu masukkan di sini.'); $('#cloud-otp').focus();
+    $('#cloud-verify').hidden = false; status('Kode masuk sudah dikirim. Periksa email, lalu masukkan kodenya di bawah.'); $('#cloud-otp').focus();
   }); });
   $('#cloud-verify').addEventListener('submit', e => { e.preventDefault(); action(e.submitter, async () => {
     const data = await request('/auth/v1/verify', { method: 'POST', body: { email: $('#cloud-email').value.trim(), token: $('#cloud-otp').value.trim(), type: 'email' } });
@@ -89,8 +89,8 @@
   window.addEventListener('online', () => engine?.sync());
   document.addEventListener('visibilitychange', () => { if (!document.hidden) engine?.sync(); });
   // Prevent another tab from continuing under an account that has logged out or changed.
-  window.addEventListener('storage', e => { if (e.key === SESSION || e.key === CONFIG) { ++generation; engine?.close(); engine = null; session = null; app.bindAccount(''); displayAccount(); status('Akun/koneksi berubah di tab lain. Muat ulang sebelum melanjutkan.'); } });
+  window.addEventListener('storage', e => { if (e.key === SESSION || e.key === CONFIG) { ++generation; engine?.close(); engine = null; session = null; app.bindAccount(''); displayAccount(); status('Akun atau koneksi diubah lewat tab lain. Muat ulang halaman sebelum melanjutkan.'); } });
   setInterval(() => { if (!document.hidden) engine?.sync(); }, 15000);
   displayAccount();
-  if (session && config.url) connect().catch(error => status('Sesi belum terhubung: ' + error.message + '. Coba Sinkron sekarang atau keluar dan login kembali.'));
+  if (session && config.url) connect().catch(error => status('Belum bisa terhubung ke akun: ' + error.message + '. Klik Sinkronkan sekarang, atau keluar lalu masuk lagi.'));
 })();

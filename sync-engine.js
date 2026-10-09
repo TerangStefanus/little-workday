@@ -13,7 +13,7 @@
       const next = signature(this.read());
       if (next === this.last) return;
       this.last = next; this.meta.pending = true; this.persist(this.meta);
-      this.status('Perubahan tersimpan di perangkat; menunggu sinkron.');
+      this.status('Perubahan tersimpan di perangkat ini dan belum terkirim ke akunmu.');
     }
     accept(row) {
       this.ready = false;
@@ -36,9 +36,9 @@
         else if (row && (row.revision !== this.meta.revision || edited)) { this.remote = row; this.conflict(true); }
         else if (!row || edited) { this.meta.pending = true; this.persist(this.meta); }
         this.last = signature(this.read()); this.ready = true;
-        if (this.remote) this.status('Dua versi agenda ditemukan. Pilih versi di Login & sinkron.');
-        else this.status(this.meta.pending ? 'Agenda siap dikirim ke cloud.' : 'Agenda sudah sinkron.');
-      } catch (error) { this.ready = true; this.status('Cloud belum bisa dibaca: ' + error.message); throw error; }
+        if (this.remote) this.status('Agenda di perangkat dan akunmu berbeda. Pilih agenda yang ingin dipakai lewat Masuk & sinkronisasi.');
+        else this.status(this.meta.pending ? 'Agenda siap disimpan ke akunmu.' : 'Agenda sudah sama dengan yang tersimpan di akunmu.');
+      } catch (error) { this.ready = true; this.status('Agenda dari akun belum bisa dimuat: ' + error.message); throw error; }
       finally { this.busy = false; }
     }
     async sync() {
@@ -49,7 +49,7 @@
           const payload = this.read(), sent = signature(payload);
           const row = await this.store.put(payload, this.meta.revision);
           if (this.closed) return;
-          if (!row) { this.remote = await this.store.get(); this.conflict(true); this.status('Perangkat lain berubah. Pilih versi sebelum melanjutkan.'); return; }
+          if (!row) { this.remote = await this.store.get(); this.conflict(true); this.status('Agenda diubah dari perangkat lain. Pilih agenda yang ingin dipakai sebelum melanjutkan.'); return; }
           this.meta.revision = row.revision;
           this.meta.pending = signature(this.read()) !== sent;
           this.last = signature(this.read()); this.persist(this.meta);
@@ -59,19 +59,19 @@
           if (this.closed) return;
           if (row && row.revision !== this.meta.revision) {
             this.changed();
-            if (this.meta.pending || before !== signature(this.read())) { this.remote = row; this.conflict(true); this.status('Perubahan bersamaan ditemukan. Pilih versi agenda.'); return; }
+            if (this.meta.pending || before !== signature(this.read())) { this.remote = row; this.conflict(true); this.status('Agenda diubah di dua perangkat. Pilih agenda yang ingin dipakai.'); return; }
             this.accept(row);
           }
         }
-        this.status(this.meta.pending ? 'Ada perubahan baru yang menunggu sinkron.' : 'Agenda sudah sinkron · ' + new Date().toLocaleTimeString('id-ID'));
-      } catch (error) { if (!this.closed) this.status('Belum sinkron: ' + error.message + '. Data perangkat tetap tersedia.'); }
+        this.status(this.meta.pending ? 'Ada perubahan baru yang belum terkirim ke akunmu.' : 'Terakhir disinkronkan · ' + new Date().toLocaleTimeString('id-ID'));
+      } catch (error) { if (!this.closed) this.status('Sinkronisasi belum berhasil: ' + error.message + '. Agenda di perangkat ini tetap tersimpan.'); }
       finally { this.busy = false; }
     }
     async resolve(useLocal) {
       if (!this.remote || this.busy || this.closed) return;
       const row = this.remote;
       if (useLocal) { this.meta.revision = row.revision; this.meta.pending = true; this.persist(this.meta); this.remote = null; this.conflict(false); await this.sync(); }
-      else { this.accept(row); this.status('Versi cloud dipakai.'); }
+      else { this.accept(row); this.status('Agenda dari akun sudah dimuat di perangkat ini.'); }
     }
     close() { this.closed = true; this.ready = false; }
   }
